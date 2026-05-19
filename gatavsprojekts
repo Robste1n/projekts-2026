@@ -1,0 +1,102 @@
+import random
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+
+TOKEN = "8722781659:AAHfbX8Kct6jW1wBM1CtyeiDJ6J8lYJn3TM"
+
+games = {}
+
+def get_random_word():
+    return random.choice([
+        "cat", "dog", "sun", "pen", "cup", "bed", "hat", "map", "box", "toy",
+        "red", "blue", "run", "jump", "ball", "fish", "bird", "milk", "egg",
+        "book", "tree", "car", "door", "road", "star", "rain", "snow",
+        "wind", "fire", "rock", "sand", "hill", "lake", "river",
+        "apple", "bread", "water", "chair", "table", "phone", "clock",
+        "glass", "plate", "spoon", "knife", "bag", "shoe", "shirt",
+        "green", "happy", "light", "dark", "small", "big", "fast", "slow",
+        "warm", "cold", "soft", "hard", "clean", "dirty",
+        "smile", "laugh", "sleep", "drink", "eat", "walk", "drive",
+        "read", "write", "play", "watch", "open", "close",
+        "house", "school", "garden", "window", "flower", "family",
+        "friend", "people", "animal", "forest", "beach", "island",
+        "Donaudampfschifffahrtsgesellschaftskapitan","sixseven"
+    ])
+
+def get_masked_word(word, guessed):
+    return " ".join([letter if letter in guessed else "_" for letter in word])
+
+def get_hearts(tries):
+    return "❤️" * tries + "🖤" * (6 - tries)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🎮 Welcome to Hangman!\nType /play to start"
+    )
+
+
+async def play(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    word = get_random_word()
+
+    games[update.effective_user.id] = {
+        "word": word,
+        "guessed": [],
+        "tries": 6
+    }
+
+    await update.message.reply_text(
+        f"Word: {get_masked_word(word, [])}\nLives: {get_hearts(6)}"
+    )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    if user_id not in games:
+        return
+
+    letter = update.message.text.lower()
+    game = games[user_id]
+
+    if len(letter) != 1 or not letter.isalpha():
+        await update.message.reply_text("Enter ONE letter (a-z)")
+        return
+
+    if letter in game["guessed"]:
+        await update.message.reply_text("You already tried this letter")
+        return
+
+    game["guessed"].append(letter)
+
+    if letter not in game["word"]:
+        game["tries"] -= 1
+
+    masked = get_masked_word(game["word"], game["guessed"])
+
+    if "_" not in masked:
+        await update.message.reply_text(
+            f"🎉 You won! The word was: {game['word']}\n{get_hearts(game['tries'])}"
+        )
+        del games[user_id]
+        return
+
+    if game["tries"] <= 0:
+        await update.message.reply_text(
+            f"💀 You lost! The word was: {game['word']}\n{get_hearts(0)}"
+        )
+        del games[user_id]
+        return
+
+    await update.message.reply_text(
+        f"{masked}\nLives: {get_hearts(game['tries'])}"
+    )
+
+
+app = ApplicationBuilder().token(TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("play", play))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+app.run_polling()
